@@ -11,13 +11,15 @@ api_id = int(os.environ.get("API_ID"))
 api_hash = os.environ.get("API_HASH")
 bot_token = os.environ.get("BOT_TOKEN")
 
+# Create a Pyrogram client object
+app = Client("my_bot", api_id, api_hash, bot_token=bot_token)
 
 
-@app.on_message(pyrogram.filters.command(["start"]))
+@app.on_message(filters.command(["start"]))
 def start(client, message):
     message.reply_text("Hi, send me a YouTube or Instagram video link to download the video.")
 
-@app.on_message(pyrogram.filters.text)
+@app.on_message(filters.text)
 def download_video(client, message):
     url = message.text
     valid_platforms = ["youtube.com", "www.youtube.com", "m.youtube.com", "youtube.com.br", "www.youtube.com.br", "instagram.com", "www.instagram.com"]
@@ -52,4 +54,5 @@ def download_video(client, message):
     else:
         message.reply_text("Invalid URL. Please send a valid YouTube or Instagram video link.")
 
+# Start the Pyrogram client
 app.run()
