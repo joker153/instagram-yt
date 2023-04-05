@@ -15,6 +15,15 @@ bot_token = os.environ.get("BOT_TOKEN")
 app = Client("my_bot_token", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
 
+# Start message
+@app.on_message(filters.command("start"))
+async def start(client, message):
+    await message.reply_text(
+        "Hello! I am a video downloader bot. Just send me a link to a YouTube or Instagram video, and I'll download it for you!"
+    )
+
+
+# Instagram video downloader
 @app.on_message(filters.regex("(?i)https?://(?:www\.)?(?:instagram\.com|instagr\.am)/p/.*"))
 async def insta(client, message):
     try:
@@ -33,6 +42,7 @@ async def insta(client, message):
             os.remove(f"{message.chat.id}.mp4")
 
 
+# YouTube video downloader
 @app.on_message(filters.regex("(?i)https?://(?:www\.)?(?:youtube\.com|youtu\.be)/.*"))
 async def youtube(client, message):
     try:
