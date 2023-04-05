@@ -11,6 +11,13 @@ api_id = int(os.environ.get("API_ID"))
 api_hash = os.environ.get("API_HASH")
 bot_token = os.environ.get("BOT_TOKEN")
 
+# API endpoint and headers
+url = "https://aiov-download-youtube-videos.p.rapidapi.com/GetVideoDetails"
+headers = {
+    "X-RapidAPI-Key": "6923523517msha40bbd50901ebdfp19ae30jsn37c67364b1c0",
+    "X-RapidAPI-Host": "aiov-download-youtube-videos.p.rapidapi.com"
+}
+
 # Initialize the Pyrogram client
 app = Client("my_bot_token", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
@@ -19,47 +26,51 @@ app = Client("my_bot_token", api_id=api_id, api_hash=api_hash, bot_token=bot_tok
 @app.on_message(filters.command("start"))
 async def start(client, message):
     await message.reply_text(
-        "Hello! I am a video downloader bot. Just send me a link to a YouTube or Instagram video, and I'll download it for you!"
+        "Hello! I am a video downloader bot. Just send me a link to a YouTube, Instagram, Facebook, Snapchat, TikTok, Koo, or LinkedIn video, and I'll download it for you!"
     )
 
 
-# Instagram video downloader
-@app.on_message(filters.regex("(?i)https?://(?:www\.)?(?:instagram\.com|instagr\.am)/p/.*"))
-async def insta(client, message):
+# Video downloader using API
+@app.on_message(filters.regex("(?i)https?://(?:www\.)?(?:youtube\.com|youtu\.be|instagram\.com|facebook\.com|snapchat\.com|tiktok\.com|koo\.app|linkedin\.com)/.*"))
+async def download_video(client, message):
     try:
         url = message.matches[0].group(0)
-        insta = instaloader.Instaloader()
-        insta.download_video(url, target=f"{message.chat.id}.mp4")
+        querystring = {"URL": url}
+        response = requests.request("GET", url, headers=headers, params=querystring)
+        data = response.json()
+
+        # Check if the video is available for download
+        if not data.get("DownloadInfo"):
+            await message.reply_text("Sorry, the video is not available for download.")
+            return
+
+        # Get the download URL and file extension
+        download_url = data["DownloadInfo"]["DownloadUrl"]
+        extension = data["DownloadInfo"]["Ext"]
+
+        # Download the video
+        filename = f"{message.chat.id}.{extension}"
+        response = requests.get(download_url, stream=True)
+        with open(filename, "wb") as file:
+            for chunk in response.iter_content(chunk_size=1024 * 1024):
+                if chunk:
+                    file.write(chunk)
+
+        # Send the downloaded video to the chat
+        caption = f"Title: {data['Title']}\nSize: {data['Size']}\nType: {data['Type']}"
         await client.send_video(
             chat_id=message.chat.id,
-            video=f"{message.chat.id}.mp4",
-            caption="Here is the requested video!",
+            video=filename,
+            caption=caption,
+            thumb=data["ThumbnailUrl"],
         )
+
     except Exception as e:
         await message.reply_text(f"An error occurred: {e}")
-    finally:
-        if os.path.exists(f"{message.chat.id}.mp4"):
-            os.remove(f"{message.chat.id}.mp4")
 
-
-# YouTube video downloader
-@app.on_message(filters.regex("(?i)https?://(?:www\.)?(?:youtube\.com|youtu\.be)/.*"))
-async def youtube(client, message):
-    try:
-        url = message.matches[0].group(0)
-        yt = pytube.YouTube(url)
-        stream = yt.streams.get_highest_resolution()
-        stream.download(output_path=".", filename=f"{message.chat.id}.mp4")
-        await client.send_video(
-            chat_id=message.chat.id,
-            video=f"{message.chat.id}.mp4",
-            caption="Here is the requested video!",
-        )
-    except Exception as e:
-        await message.reply_text(f"An error occurred: {e}")
     finally:
-        if os.path.exists(f"{message.chat.id}.mp4"):
-            os.remove(f"{message.chat.id}.mp4")
+        if os.path.exists(filename):
+            os.remove(filename)
 
 
 app.run()
