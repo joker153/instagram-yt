@@ -1,73 +1,49 @@
 import os
-import re
+import pyrogram
 import requests
 from pyrogram import Client, filters
 from pyrogram.types import Message
+from pytube import YouTube
+from instaloader import Instaloader, Post
 
-# Set up the Telegram API client
-api_id = int(os.environ.get('API_ID'))
-api_hash = os.environ.get('API_HASH')
-bot_token = os.environ.get('BOT_TOKEN')
-app = Client('video_downloader_bot', api_id, api_hash, bot_token=bot_token)
+# Get the API ID, API Hash, and bot token from environment variables
+api_id = int(os.environ.get("API_ID"))
+api_hash = os.environ.get("API_HASH")
+bot_token = os.environ.get("BOT_TOKEN")
 
-# Define the commands that the bot will recognize
-commands = ['/start', '/help']
+# Initialize the Pyrogram client
+app = Client("my_bot_token", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
-# Define the download function
-def download_video(url):
-    # Check if the URL is from Instagram or YouTube
-    if 'instagram.com' in url:
-        # Download the Instagram video
-        page = requests.get(url).text
-        video_url = re.search('property="og:video" content="(.*?)"', page).group(1)
-        filename = 'instagram.mp4'
-    elif 'youtube.com' in url:
-        # Download the YouTube video
-        video_url = f'https://www.youtube.com/watch?v={url.split("?v=")[-1]}'
-        # Get the highest quality available
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(video_url, headers=headers)
-        formats = re.findall('"adaptiveFormats":(.*?),"adaptiveFormats"', response.text)
-        format = max(formats, key=lambda x: int(re.search('"qualityLabel":"(\d+)p"', x).group(1)))
-        video_url = re.search('"url":"(.*?)"', format).group(1)
-        filename = 'youtube.mp4'
-    else:
-        return None
+# Define the command to download Instagram videos
+@app.on_message(filters.command("insta"))
+async def insta(bot: Client, message: Message):
+    # Get the Instagram post URL from the message
+    url = message.text.split(" ")[1]
 
-    # Download the video
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    response = requests.get(video_url, headers=headers, stream=True)
-    with open(filename, 'wb') as f:
-        for chunk in response.iter_content(chunk_size=1024):
-            if chunk:
-                f.write(chunk)
+    # Download the post using Instaloader
+    L = Instaloader()
+    post = Post.from_shortcode(L.context, url)
+    L.download_post(post, target="insta_videos")
 
-    return filename
+    # Send the video file to the user
+    video_file = f"insta_videos/{post.date_utc.strftime('%Y-%m-%d_%H-%M-%S')}.mp4"
+    await bot.send_video(chat_id=message.chat.id, video=video_file)
 
-# Define the start command handler
-@app.on_message(filters.command('start'))
-def start_handler(client: Client, message: Message):
-    message.reply_text('Welcome to the video downloader bot! To download a video, send me a message with the URL.')
+# Define the command to download YouTube videos
+@app.on_message(filters.command("youtube"))
+async def youtube(bot: Client, message: Message):
+    # Get the YouTube video URL from the message
+    url = message.text.split(" ")[1]
 
-# Define the help command handler
-@app.on_message(filters.command('help'))
-def help_handler(client: Client, message: Message):
-    message.reply_text('To download a video, send me a message with the URL.')
+    # Download the video using Pytube
+    video = YouTube(url)
+    stream = video.streams.get_highest_resolution()
+    stream.download(output_path="youtube_videos")
 
-# Define the message handler
-@app.on_message(filters.text)
-def message_handler(client: Client, message: Message):
-    # Parse the message text
-    url = message.text.strip()
+    # Send the video file to the user
+    video_file = f"youtube_videos/{video.title}.mp4"
+    await bot.send_video(chat_id=message.chat.id, video=video_file)
 
-    # Download the video
-    filename = download_video(url)
-    if filename is None:
-        message.reply_text('Invalid URL. Please send a valid Instagram or YouTube URL.')
-        return
-
-    # Send the video to the user
-    message.reply_video(filename, supports_streaming=True)
-
-    # Delete the downloaded file
-    os
+# Run the bot
+if __name__ == "__main__":
+    app.run()
